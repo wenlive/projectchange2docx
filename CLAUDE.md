@@ -7,14 +7,17 @@ process can be reused across repositories.
 ## Quick start
 
 ```bash
-# 1. Copy generate_change_review.py to the target repository root.
-# 2. Edit TARGET_COMMIT (and optionally EXCLUDE_PATTERNS /
-#    FORCE_INCLUDE_PREFIXES) in the script header.
-# 3. Run it:
+# From the target repository root:
 pip install python-docx
+python3 /path/to/git-diff-review/generate_change_review.py <commit-hash>
+
+# Or copy the script in and edit TARGET_COMMIT/TARGET_COMMIT in the header,
+# then run without args:
 python3 generate_change_review.py
-# 4. Open change_review.docx
 ```
+
+The script must be invoked from the target repository root — all `git diff`
+commands use `os.getcwd()`.
 
 ## File layout
 

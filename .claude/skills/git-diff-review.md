@@ -39,11 +39,14 @@ description: >
 ### 2. 运行脚本
 
 ```bash
+cd /path/to/target-repo
 pip install python-docx
-python3 generate_change_review.py
+python3 /path/to/git-diff-review/generate_change_review.py <commit>
+# 或带自定义输出名：
+python3 generate_change_review.py abc123 --output my_review.docx
 ```
 
-脚本将从 `.py` 文件所在目录运行 `git diff`。请在仓库根目录执行。
+**注意**：脚本必须在目标仓库根目录执行（`git diff` 使用 `os.getcwd()`）。
 
 ### 3. 验证输出
 
