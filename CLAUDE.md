@@ -57,3 +57,10 @@ When the `git-diff-review` skill is invoked, Claude will:
 - **Smart titling** — the Word document title is auto-detected as
   `{repo-name} 项目代码整合文档`. Statistics are printed to the terminal
   only, not cluttering the document's first page.
+- **Safe exclude patterns** — `EXCLUDE_PATTERNS` matches against each path
+  segment individually.  Only unambiguous patterns (e.g. `node_modules`,
+  `*.so`) are included by default.  Generic directory names like `dist`,
+  `vendor`, or `build` should NOT be added — they silently drop legitimate
+  source code in identically named subdirectories.
+- **XML sanitization** — control characters invalid in XML are stripped from
+  code content before writing to the Word document.
