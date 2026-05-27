@@ -8,9 +8,9 @@ description: >
   current-version content (no unified diff output).  Document-type files
   (markdown, .gitignore, license notices) are excluded by default via
   SKIP_DOC_FILES toggle and listed in a separate appendix.  Every file
-  starts on a new page, code is rendered in Consolas 9 pt, and a
-  force-include prefix list keeps important paths regardless of the
-  change-size threshold.
+  starts on a new page, code is rendered in Consolas 9 pt.  The document
+  title is auto-detected as "{repo-name} 项目代码整合文档" and statistics
+  are printed to the terminal only.
 ---
 
 ## 概述

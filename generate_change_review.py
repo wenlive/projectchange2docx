@@ -18,7 +18,6 @@ import sys
 import fnmatch
 import re
 import time
-from datetime import datetime
 
 try:
     from docx import Document
@@ -413,25 +412,15 @@ def main():
     doc = Document()
     setup_page(doc)
 
-    # ── Title page ──
+    # ── Title ──
+    # Detect repository name from the current working directory
+    repo_name = os.path.basename(os.getcwd().rstrip("/"))
     tp = doc.add_paragraph()
     tp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r = tp.add_run(f"Change Review\n{TARGET_COMMIT[:8]}... → HEAD")
+    r = tp.add_run(f"{repo_name} 项目代码整合文档")
     r.bold = True
     r.font.name = "Calibri"
     r.font.size = Pt(16)
-
-    add_normal_para(doc, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", size=Pt(10))
-    add_normal_para(
-        doc,
-        f"\nFiles selected                                : {len(files_to_process)}\n"
-        f"  (threshold ≥ {MIN_CHANGED_LINES} changed lines, "
-        f"or force-include prefix)\n"
-        f"Binary files skipped                          : {len(skipped_binary)}\n"
-        f"Doc files skipped                             : {len(skipped_docs)}",
-        size=Pt(10),
-    )
-    doc.add_page_break()
 
     # ── Per-file pages ──
     total_selected = len(files_to_process)

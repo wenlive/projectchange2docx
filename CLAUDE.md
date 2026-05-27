@@ -54,5 +54,6 @@ When the `git-diff-review` skill is invoked, Claude will:
   not during classification, to avoid double I/O.
 - **Single-paragraph-per-file** — code blocks use `<w:br/>` line breaks inside
   one Word paragraph, cutting python-docx XML overhead ~100×.
-- **XML sanitization** — control characters invalid in XML are stripped from
-  code content before writing to the Word document.
+- **Smart titling** — the Word document title is auto-detected as
+  `{repo-name} 项目代码整合文档`. Statistics are printed to the terminal
+  only, not cluttering the document's first page.
