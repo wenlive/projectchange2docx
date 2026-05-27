@@ -35,15 +35,19 @@ except ImportError:
 TARGET_COMMIT = "CHANGE_ME"           # edit or pass as 1st CLI argument
 OUTPUT_FILE = "change_review.docx"    # override with --output
 
-# Path components to exclude (checked against every path segment)
+# Path components to exclude (checked against every path segment).
+# IMPORTANT: is_excluded() matches these patterns against EACH path segment
+# individually.  Only use patterns that are unambiguous — directory names that
+# are NEVER legitimate source code (e.g. "node_modules", "__pycache__") and
+# file extensions that are NEVER source text (e.g. "*.so", "*.png").
+# Do NOT add generic names like "dist", "build", "vendor", "test" — they will
+# match identically named directories deep inside legitimate source trees.
 EXCLUDE_PATTERNS = [
     "node_modules",
-    "dist",
     "__pycache__",
     ".git",
     ".svn",
     ".hg",
-    "vendor",
     ".cache",
     "*.pyc",
     "*.pyo",
@@ -96,9 +100,7 @@ DOC_EXCLUDE_PATTERNS = [
 
 # Thresholds
 MIN_CHANGED_LINES = 20       # ignore files with fewer total changes
-FULL_OUTPUT_LINES = 200      # changed_lines > this  →  full file output
-FULL_OUTPUT_RATIO = 0.30     # changed_lines > ratio * total_lines  →  full output
-DIFF_CONTEXT_LINES = 3       # context lines in unified diff
+FULL_OUTPUT_LINES = 200      # changed_lines > this  →  skip ratio-check, go straight to full output
 
 # Word formatting
 FONT_MONO = "Consolas"
@@ -150,6 +152,8 @@ def is_force_include(filepath):
 def is_doc_file(filepath):
     """True if filepath matches a document-type exclusion pattern (when SKIP_DOC_FILES is enabled)."""
     if not SKIP_DOC_FILES:
+        return False
+    if is_force_include(filepath):
         return False
     filepath = filepath.replace("\\", "/")
     filename = filepath.split("/")[-1] if "/" in filepath else filepath
@@ -229,35 +233,10 @@ def parse_numstat(output):
     return stats
 
 
-def file_total_lines(filepath):
-    """Return line count of a file at HEAD (0 on error)."""
-    try:
-        out = run(["git", "show", f"HEAD:{filepath}"])
-        return out.count("\n")
-    except Exception:
-        return 0
-
-
 def read_head_file(filepath):
     """Return (content, error_msg) for a file at HEAD."""
     try:
         out = run(["git", "show", f"HEAD:{filepath}"])
-        return out, None
-    except Exception as e:
-        return None, str(e)
-
-
-def get_file_diff(filepath, old_path=None):
-    """Return (unified_diff_text, error_msg) for a single file."""
-    args = [
-        "git", "diff",
-        f"-U{DIFF_CONTEXT_LINES}",
-        f"{TARGET_COMMIT}^..HEAD",
-        "--",
-        filepath,
-    ]
-    try:
-        out = run(args)
         return out, None
     except Exception as e:
         return None, str(e)
@@ -576,8 +555,8 @@ def parse_args():
             print("  --output FILE  Output filename (default: change_review.docx).")
             print()
             print("Configuration constants (edit in script):")
-            print("  EXCLUDE_PATTERNS, FORCE_INCLUDE_PREFIXES, MIN_CHANGED_LINES,")
-            print("  FULL_OUTPUT_LINES, FULL_OUTPUT_RATIO, PAGE_LANDSCAPE")
+            print("  EXCLUDE_PATTERNS, FORCE_INCLUDE_PREFIXES, SKIP_DOC_FILES,")
+            print("  DOC_EXCLUDE_PATTERNS, MIN_CHANGED_LINES, FULL_OUTPUT_LINES, PAGE_LANDSCAPE")
             sys.exit(0)
         elif args[i] == "--output" and i + 1 < len(args):
             OUTPUT_FILE = args[i + 1]
