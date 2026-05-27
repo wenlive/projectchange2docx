@@ -4,11 +4,13 @@ description: >
   Given two git commits, generate a Word document summarizing the net
   differences.  Binary files are skipped (listed in appendix), deleted files
   are skipped, renamed files are treated as new, and small changes (< 20
-  lines, configurable) are omitted.  Large changes (> 200 lines or > 30 %
-  of the file) get full current-version content; otherwise only the unified
-  diff is included.  Every file starts on a new page, code is rendered in
-  Consolas 9 pt, and a force-include prefix list keeps important paths
-  regardless of the change-size threshold.
+  lines, configurable) are omitted.  All included files get full
+  current-version content (no unified diff output).  Document-type files
+  (markdown, .gitignore, license notices) are excluded by default via
+  SKIP_DOC_FILES toggle and listed in a separate appendix.  Every file
+  starts on a new page, code is rendered in Consolas 9 pt, and a
+  force-include prefix list keeps important paths regardless of the
+  change-size threshold.
 ---
 
 ## 概述
@@ -69,6 +71,13 @@ FORCE_INCLUDE_PREFIXES = [               # 强制包含的路径前缀
     "src/gausskernel/storage/nvmdb",
 ]
 
+SKIP_DOC_FILES = True                    # 是否跳过文档类型文件
+DOC_EXCLUDE_PATTERNS = [                 # 文档排除模式（仅当 SKIP_DOC_FILES=True）
+    "*.md", "*.markdown", "*.MD",
+    ".gitignore",
+    "Third_Party_Open_Source_Software_Notice",
+]
+
 MIN_CHANGED_LINES = 20                   # 忽略变更少于此值的文件
 FULL_OUTPUT_LINES = 200                  # 变更超过此行数 -> 输出全文
 FULL_OUTPUT_RATIO = 0.30                 # 变更超过此比例 -> 输出全文
@@ -104,7 +113,8 @@ Git 默认 `core.quotePath=true`，会将非 ASCII 路径输出为八进制转�
 ### 文件过滤的优先级
 
 1. 排除模式匹配（`is_excluded()`） → 跳过（但强制包含的前缀优先）
-2. 已删除文件（`--name-status` 中的 `D`） → 跳过
-3. 二进制文件（`--numstat` 中的 `- -`） → 跳过，计入附录
-4. 改变行数 < `MIN_CHANGED_LINES` → 跳过（但强制包含的前缀优先）
-5. 其余文件 → 根据阈值判断输出模式
+2. 文档文件匹配（`is_doc_file()`） → 跳过，计入文档附录（当 `SKIP_DOC_FILES=True`）
+3. 已删除文件（`--name-status` 中的 `D`） → 跳过
+4. 二进制文件（`--numstat` 中的 `- -`） → 跳过，计入附录
+5. 改变行数 < `MIN_CHANGED_LINES` → 跳过（但强制包含的前缀优先）
+6. 其余文件 → 输出完整文件内容

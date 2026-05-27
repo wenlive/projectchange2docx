@@ -83,6 +83,17 @@ EXCLUDE_PATTERNS = [
 # Example: ["src/module/subdir", "docs/important"]
 FORCE_INCLUDE_PREFIXES = []
 
+# Document file exclusion — when SKIP_DOC_FILES is True, documentation-type files
+# (markdown, .gitignore, license notices, etc.) are skipped and listed in an appendix.
+SKIP_DOC_FILES = True
+DOC_EXCLUDE_PATTERNS = [
+    "*.md",
+    "*.markdown",
+    "*.MD",
+    ".gitignore",
+    "Third_Party_Open_Source_Software_Notice",
+]
+
 # Thresholds
 MIN_CHANGED_LINES = 20       # ignore files with fewer total changes
 FULL_OUTPUT_LINES = 200      # changed_lines > this  →  full file output
@@ -132,6 +143,18 @@ def is_force_include(filepath):
     filepath = filepath.replace("\\", "/")
     for prefix in FORCE_INCLUDE_PREFIXES:
         if filepath.startswith(prefix):
+            return True
+    return False
+
+
+def is_doc_file(filepath):
+    """True if filepath matches a document-type exclusion pattern (when SKIP_DOC_FILES is enabled)."""
+    if not SKIP_DOC_FILES:
+        return False
+    filepath = filepath.replace("\\", "/")
+    filename = filepath.split("/")[-1] if "/" in filepath else filepath
+    for pat in DOC_EXCLUDE_PATTERNS:
+        if fnmatch.fnmatch(filename, pat):
             return True
     return False
 
@@ -284,7 +307,9 @@ def add_code_block(doc, code_text):
 
     lines = code_text.split("\n")
     for i, line in enumerate(lines):
-        run = para.add_run(line if line else " ")
+        # Strip control characters that are invalid in XML (keep tab, newline, carriage return)
+        clean_line = "".join(ch for ch in (line if line else " ") if ch == "\t" or ch == "\r" or (ord(ch) >= 32 and ord(ch) != 0x7F) or ch in "\n")
+        run = para.add_run(clean_line if clean_line else " ")
         set_mono(run)
         if i < len(lines) - 1:
             run.add_break(WD_BREAK.LINE)
@@ -326,6 +351,7 @@ def main():
     t0 = time.time()
     files_to_process = []      # (filepath, info_dict)
     skipped_binary = []        # filepath
+    skipped_docs = []          # filepath
     encoding_issues = []       # (filepath, error_msg)
 
     entries = sorted(numstats.items())
@@ -341,6 +367,7 @@ def main():
                 f"\r      scanning {idx + 1}/{total_entries} entries  "
                 f"(kept {len(files_to_process)}, "
                 f"binary {len(skipped_binary)}, "
+                f"docs {len(skipped_docs)}, "
                 f"force {force_count})  [{elapsed:.0f}s]"
             )
             sys.stdout.flush()
@@ -348,6 +375,11 @@ def main():
 
         # ── Exclude check ──
         if is_excluded(filepath):
+            continue
+
+        # ── Doc file check ──
+        if is_doc_file(filepath):
+            skipped_docs.append(filepath)
             continue
 
         # ── Deleted files: skip ──
@@ -416,7 +448,8 @@ def main():
         f"\nFiles selected                                : {len(files_to_process)}\n"
         f"  (threshold ≥ {MIN_CHANGED_LINES} changed lines, "
         f"or force-include prefix)\n"
-        f"Binary files skipped                          : {len(skipped_binary)}",
+        f"Binary files skipped                          : {len(skipped_binary)}\n"
+        f"Doc files skipped                             : {len(skipped_docs)}",
         size=Pt(10),
     )
     doc.add_page_break()
@@ -427,17 +460,14 @@ def main():
         mode = info["output_mode"]
         cached_content = None
 
-        # Files that need a ratio check: read content once, decide, reuse
+        # Always output full file content (no diff mode).
         if mode == "check_ratio":
             cached_content, err = read_head_file(fp)
             if err:
                 encoding_issues.append((fp, err))
                 continue
             info["total_lines"] = cached_content.count("\n")
-            if info["total_lines"] > 0 and info["changed_lines"] > info["total_lines"] * FULL_OUTPUT_RATIO:
-                mode = info["output_mode"] = "full"
-            else:
-                mode = info["output_mode"] = "diff"
+            mode = info["output_mode"] = "full"
 
         sys.stdout.write(
             f"\r  [{idx + 1}/{total_selected}] {fp}  "
@@ -466,26 +496,18 @@ def main():
         r.font.size = Pt(8)
         r.italic = True
 
-        if mode == "full":
-            if cached_content is not None:
-                content = cached_content
-            else:
-                content, err = read_head_file(fp)
-                if err:
-                    encoding_issues.append((fp, err))
-                    add_normal_para(doc, f"[SKIPPED] Could not read file: {err}", size=Pt(9))
-                    continue
-                # Back-fill total_lines for full-mode files that skipped counting
-                if info["total_lines"] == 0:
-                    info["total_lines"] = content.count("\n")
-            add_code_block(doc, content)
+        if cached_content is not None:
+            content = cached_content
         else:
-            diff_text, err = get_file_diff(fp)
+            content, err = read_head_file(fp)
             if err:
                 encoding_issues.append((fp, err))
-                add_normal_para(doc, f"[SKIPPED] Could not generate diff: {err}", size=Pt(9))
+                add_normal_para(doc, f"[SKIPPED] Could not read file: {err}", size=Pt(9))
                 continue
-            add_code_block(doc, diff_text)
+            # Back-fill total_lines for files that skipped counting
+            if info["total_lines"] == 0:
+                info["total_lines"] = content.count("\n")
+        add_code_block(doc, content)
 
     print()  # newline after progress line
     print(f"      → document body built  ({time.time() - t0:.1f}s)", flush=True)
@@ -502,6 +524,19 @@ def main():
             p.paragraph_format.space_before = Pt(0)
             p.paragraph_format.space_after = Pt(0)
             mr = p.add_run(f"  {bf}")
+            set_mono(mr)
+
+    # Doc files
+    if skipped_docs:
+        doc.add_page_break()
+        add_heading_text(doc, "Appendix: Skipped Document Files")
+        add_normal_para(doc, "The following document-type files were excluded from the review "
+                        "(SKIP_DOC_FILES is enabled):", size=Pt(10))
+        for dfp in sorted(skipped_docs):
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(0)
+            p.paragraph_format.space_after = Pt(0)
+            mr = p.add_run(f"  {dfp}")
             set_mono(mr)
 
     # Encoding issues
@@ -524,6 +559,7 @@ def main():
     print(f"\nDone → {OUTPUT_FILE}  (total {total_elapsed:.1f}s)")
     print(f"  Files written to doc : {len(files_to_process) - len(encoding_issues)}")
     print(f"  Binary skipped       : {len(skipped_binary)}")
+    print(f"  Doc files skipped    : {len(skipped_docs)}")
     print(f"  Encoding issues      : {len(encoding_issues)}")
 
 

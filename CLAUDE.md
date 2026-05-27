@@ -44,7 +44,15 @@ When the `git-diff-review` skill is invoked, Claude will:
 - **No intermediate-history analysis** — pure `git diff A..B`, not commit-by-commit.
 - **Force-include prefix** — specific subtrees (e.g. `src/vendor/foo`) can be
   marked to always appear regardless of the 20-line threshold.
+- **Always full file content** — every included file gets its complete current
+  content (no unified diff output). Small changes are either skipped (below
+  `MIN_CHANGED_LINES`) or output in full.
+- **Document file exclusion** — when `SKIP_DOC_FILES` is enabled (default),
+  markdown files, `.gitignore`, and license notices are filtered out and listed
+  in a separate appendix. Controlled via `DOC_EXCLUDE_PATTERNS`.
 - **Deferred content reads** — file contents are read during Word generation,
   not during classification, to avoid double I/O.
 - **Single-paragraph-per-file** — code blocks use `<w:br/>` line breaks inside
   one Word paragraph, cutting python-docx XML overhead ~100×.
+- **XML sanitization** — control characters invalid in XML are stripped from
+  code content before writing to the Word document.
