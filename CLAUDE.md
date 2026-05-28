@@ -64,3 +64,15 @@ When the `git-diff-review` skill is invoked, Claude will:
   source code in identically named subdirectories.
 - **XML sanitization** — control characters invalid in XML are stripped from
   code content before writing to the Word document.
+- **Brand filtering** — three complementary mechanisms for removing brand
+  traces from the output:
+  - `FILEPATH_EXCLUDE_KEYWORDS`: case-insensitive path-segment match; matching
+    files are skipped and listed in a "Brand-Excluded" appendix.
+  - `PATH_REWRITE_RULES`: (old, new) tuple list applied to every path shown in
+    the document (headings, appendices) without affecting git reads.
+  - `CONTENT_REPLACEMENTS`: case-sensitive string replacements applied in order
+    to file content before writing to the docx.
+- **Verification script** — `verify_change_review.py` cross-references the
+  generated .docx against git diff to audit file classification, content
+  fidelity (with empty-line normalization), and brand term leakage.  Run it
+  from the target repo root same as the main script.

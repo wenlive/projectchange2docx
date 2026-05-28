@@ -43,8 +43,35 @@ python3 generate_change_review.py abc123 --output my_review.docx
 | `EXCLUDE_PATTERNS` | `[node_modules, __pycache__, ...]` | 排除的路径段/扩展名 |
 | `FORCE_INCLUDE_PREFIXES` | `[]` | 强制包含的路径前缀 |
 | `PAGE_LANDSCAPE` | `False` | 纵向/横向 |
+| `FILEPATH_EXCLUDE_KEYWORDS` | `[opengauss, gaussdb, ...]` | 路径命中即排除文件（不区分大小写） |
+| `PATH_REWRITE_RULES` | `[(gausskernel, kernel), ...]` | 路径组件重写规则 |
+| `CONTENT_REPLACEMENTS` | `[(openGauss, HelmDB), ...]` | 代码内容中的品牌词替换 |
 
 **注意**：`EXCLUDE_PATTERNS` 使用路径段匹配（逐段比对），请只添加无歧义的模式。不要添加 `dist`、`build`、`vendor` 等通用目录名——它们会匹配到深层源码中同名目录，导致文件被静默丢弃。`DOC_EXCLUDE_PATTERNS` 仅匹配文件名（最后一段），可以放心使用 `*.md` 等扩展名模式。
+
+## 品牌过滤
+
+脚本支持从输出中移除特定品牌的痕迹，适用于项目 fork/rebase 场景：
+
+- **`FILEPATH_EXCLUDE_KEYWORDS`**：路径（不区分大小写）包含任一关键词的文件直接不导出，列入 Brand-Excluded 附录
+- **`PATH_REWRITE_RULES`**：Word 文档中显示的所有路径会应用这些重写规则（原始路径仍用于 git 读取）
+- **`CONTENT_REPLACEMENTS`**：文件内容在写入 Word 前按顺序应用这些替换（区分大小写）
+
+路径重写和内容替换也适用于所有附录（Binary、Doc、Brand、Encoding）中的文件路径。
+
+## 回归验证
+
+`verify_change_review.py` 可对生成的 Word 文档进行交叉比对：
+
+```bash
+python3 verify_change_review.py <commit> <docx> --sample 10
+```
+
+验证内容：
+- 文件分类计数是否与 git diff 规则一致
+- 包含/排除附录是否无遗漏、无多余
+- 随机采样文件内容是否匹配（含归一化处理）
+- 全文档品牌词扫描
 
 ## 输出说明
 

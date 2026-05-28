@@ -106,6 +106,41 @@ FONT_MONO = "Consolas"
 FONT_SIZE_CODE = Pt(9)
 PAGE_LANDSCAPE = False       # portrait (vertical) orientation
 
+# ── Brand filtering & content sanitization ────────────────────────────────────
+# Files whose path segments match any of these keywords are excluded entirely.
+# Matching is case-insensitive and checked against each path segment.
+FILEPATH_EXCLUDE_KEYWORDS = [
+    "opengauss",
+    "gaussdb",
+    "openeuler",
+    "kunpeng",
+    "mogdb",
+    "vastbase",
+    "huawei",
+    "huaweicloud",
+]
+
+# Path component rewrite rules: (old, new) tuples applied to file paths
+# displayed in the Word document.  Original paths are still used for git reads.
+PATH_REWRITE_RULES = [
+    ("gausskernel", "kernel"),
+    ("GAUSSKERNEL", "KERNEL"),
+]
+
+# Content replacement rules applied to file content before writing to the Word
+# document.  Applied in order (case-sensitive).
+CONTENT_REPLACEMENTS = [
+    ("gausskernel", "kernel"),
+    ("GAUSSKERNEL", "KERNEL"),
+    ("OpenGauss", "HelmDB"),
+    ("openGauss", "HelmDB"),
+    ("OPENGAUSS", "HELMDB"),
+    ("opengauss", "helmdb"),
+    ("GaussDB", "HelmDB"),
+    ("GAUSSDB", "HELMDB"),
+    ("gaussdb", "helmdb"),
+]
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def run(cmd_args, cwd=None):
@@ -160,6 +195,41 @@ def is_doc_file(filepath):
         if fnmatch.fnmatch(filename, pat):
             return True
     return False
+
+
+def is_brand_excluded(filepath):
+    """True if any path segment contains a brand keyword (case-insensitive)."""
+    if is_force_include(filepath):
+        return False
+    filepath = filepath.replace("\\", "/")
+    segments = filepath.split("/")
+    for seg in segments:
+        seg_lower = seg.lower()
+        for kw in FILEPATH_EXCLUDE_KEYWORDS:
+            if kw in seg_lower:
+                return True
+    return False
+
+
+def rewrite_filepath(filepath):
+    """Apply PATH_REWRITE_RULES to a file path for display purposes."""
+    result = filepath
+    for old, new in PATH_REWRITE_RULES:
+        result = result.replace(old, new)
+    return result
+
+
+def clean_display_path(filepath):
+    """Rewrite path components AND sanitize brand terms for display."""
+    return sanitize_content(rewrite_filepath(filepath))
+
+
+def sanitize_content(text):
+    """Apply CONTENT_REPLACEMENTS to sanitize brand terms from code content."""
+    result = text
+    for old, new in CONTENT_REPLACEMENTS:
+        result = result.replace(old, new)
+    return result
 
 
 def parse_name_status(output):
@@ -330,6 +400,7 @@ def main():
     files_to_process = []      # (filepath, info_dict)
     skipped_binary = []        # filepath
     skipped_docs = []          # filepath
+    skipped_brand = []         # filepath — excluded for brand keywords in path
     encoding_issues = []       # (filepath, error_msg)
 
     entries = sorted(numstats.items())
@@ -346,6 +417,7 @@ def main():
                 f"(kept {len(files_to_process)}, "
                 f"binary {len(skipped_binary)}, "
                 f"docs {len(skipped_docs)}, "
+                f"brand {len(skipped_brand)}, "
                 f"force {force_count})  [{elapsed:.0f}s]"
             )
             sys.stdout.flush()
@@ -358,6 +430,11 @@ def main():
         # ── Doc file check ──
         if is_doc_file(filepath):
             skipped_docs.append(filepath)
+            continue
+
+        # ── Brand keyword exclusion ──
+        if is_brand_excluded(filepath):
+            skipped_brand.append(filepath)
             continue
 
         # ── Deleted files: skip ──
@@ -451,7 +528,8 @@ def main():
             "M": "[MODIFIED]", "T": "[TYPE CHANGED]",
         }.get(info["status"], "")
 
-        add_heading_text(doc, f"{fp}  {status_label}  (+{info['added']}/-{info['deleted']})")
+        display_path = rewrite_filepath(fp)
+        add_heading_text(doc, f"{display_path}  {status_label}  (+{info['added']}/-{info['deleted']})")
 
         meta = doc.add_paragraph()
         r = meta.add_run(
@@ -465,7 +543,7 @@ def main():
         r.italic = True
 
         if cached_content is not None:
-            content = cached_content
+            content = sanitize_content(cached_content)
         else:
             content, err = read_head_file(fp)
             if err:
@@ -475,6 +553,7 @@ def main():
             # Back-fill total_lines for files that skipped counting
             if info["total_lines"] == 0:
                 info["total_lines"] = content.count("\n")
+            content = sanitize_content(content)
         add_code_block(doc, content)
 
     print()  # newline after progress line
@@ -491,7 +570,7 @@ def main():
             p = doc.add_paragraph()
             p.paragraph_format.space_before = Pt(0)
             p.paragraph_format.space_after = Pt(0)
-            mr = p.add_run(f"  {bf}")
+            mr = p.add_run(f"  {clean_display_path(bf)}")
             set_mono(mr)
 
     # Doc files
@@ -504,7 +583,20 @@ def main():
             p = doc.add_paragraph()
             p.paragraph_format.space_before = Pt(0)
             p.paragraph_format.space_after = Pt(0)
-            mr = p.add_run(f"  {dfp}")
+            mr = p.add_run(f"  {clean_display_path(dfp)}")
+            set_mono(mr)
+
+    # Brand-excluded files
+    if skipped_brand:
+        doc.add_page_break()
+        add_heading_text(doc, "Appendix: Brand-Excluded Files")
+        add_normal_para(doc, "The following files were excluded because their path contains "
+                        "brand-related keywords:", size=Pt(10))
+        for bfp in sorted(skipped_brand):
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(0)
+            p.paragraph_format.space_after = Pt(0)
+            mr = p.add_run(f"  {clean_display_path(bfp)}")
             set_mono(mr)
 
     # Encoding issues
@@ -516,7 +608,7 @@ def main():
             p = doc.add_paragraph()
             p.paragraph_format.space_before = Pt(0)
             p.paragraph_format.space_after = Pt(0)
-            mr = p.add_run(f"  {fp}\n    → {err}")
+            mr = p.add_run(f"  {clean_display_path(fp)}\n    → {err}")
             set_mono(mr)
 
     # Save
@@ -528,6 +620,7 @@ def main():
     print(f"  Files written to doc : {len(files_to_process) - len(encoding_issues)}")
     print(f"  Binary skipped       : {len(skipped_binary)}")
     print(f"  Doc files skipped    : {len(skipped_docs)}")
+    print(f"  Brand excluded       : {len(skipped_brand)}")
     print(f"  Encoding issues      : {len(encoding_issues)}")
 
 
